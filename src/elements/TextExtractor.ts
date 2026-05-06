@@ -14,7 +14,13 @@ export class TextExtractor {
   static extract(
     spTree: Element | null,
     themeColors: Record<string, string>,
-    opts: { context?: "slide" | "layout" | "master"; placeholderGeom?: Record<string, { x: number; y: number; cx: number; cy: number }> } = {}
+    opts: {
+      context?: "slide" | "layout" | "master";
+      placeholderGeom?: Record<string, { x: number; y: number; cx: number; cy: number }>;
+      /** Effective ph type per idx, resolved from layout/master so slide-level
+       *  placeholders that only carry idx still expose their inherited type. */
+      placeholderTypes?: Record<string, string>;
+    } = {}
   ): TextElement[] {
     if (!spTree) return [];
 
@@ -35,7 +41,25 @@ export class TextExtractor {
       const paragraphs = txBody.getElementsByTagNameNS("*", "p");
       const bodyPr = txBody.getElementsByTagNameNS("*", "bodyPr")[0] ?? null;
       const anchor = bodyPr?.getAttribute("anchor") || undefined; // t|ctr|b
-      const verticalAlign = anchor === "ctr" ? "middle" : anchor === "b" ? "bottom" : "top";
+      const phIdx = ph?.getAttribute("idx") || undefined;
+      // Slide-level placeholders often omit `type` and inherit it from the
+      // layout/master via matching `idx`. Resolve the effective type so the
+      // placeholder-aware defaults below also apply to inherited body/title.
+      const phType =
+        ph?.getAttribute("type")
+        || (phIdx ? opts.placeholderTypes?.[phIdx] : undefined)
+        || undefined;
+      const isTitlePh = phType === "title" || phType === "ctrTitle";
+      // The lib doesn't read txStyles from the slideMaster, so placeholder
+      // text falls back to hard-coded defaults. PowerPoint's master usually
+      // anchors title bodies to bottom, sets ~44pt bold and centers them, and
+      // anchors subtitles to top at ~24pt centered. Apply those defaults here
+      // so titles/subtitles aren't tiny, top-left and floating mid-box.
+      const verticalAlign =
+        anchor === "ctr" ? "middle"
+        : anchor === "b" ? "bottom"
+        : isTitlePh ? "bottom"
+        : "top";
       const lIns = bodyPr?.getAttribute("lIns");
       const tIns = bodyPr?.getAttribute("tIns");
       const rIns = bodyPr?.getAttribute("rIns");
@@ -49,7 +73,9 @@ export class TextExtractor {
 
       const textRuns: string[] = [];
       let fontName = "Arial";
-      let fontSize = 18;
+      let fontSize = isTitlePh ? 44 : phType === "subTitle" ? 24 : 18;
+      let fontWeight: "normal" | "bold" = isTitlePh ? "bold" : "normal";
+      const isCenteredPh = isTitlePh || phType === "subTitle";
       let color: string | undefined = undefined;
       let horizontalAlign: "left" | "center" | "right" | "justify" | undefined = undefined;
 
@@ -103,6 +129,10 @@ export class TextExtractor {
               const n = parseInt(sz, 10);
               if (Number.isFinite(n)) fontSize = n / 100;
             }
+
+            const bAttr = rPr.getAttribute("b");
+            if (bAttr === "1") fontWeight = "bold";
+            else if (bAttr === "0") fontWeight = "normal";
 
             const solidFill = rPr.querySelector("*|solidFill");
             const candidate = XmlHelper.getColorFromElement(solidFill || null, themeColors);
@@ -212,8 +242,10 @@ export class TextExtractor {
         cx = XmlHelper.getAttrAsNumber(ext, "cx");
         cy = XmlHelper.getAttrAsNumber(ext, "cy");
       } else if (opts.placeholderGeom) {
-        const phIdx = ph?.getAttribute("idx") || undefined;
-        const g = phIdx ? opts.placeholderGeom[phIdx] : undefined;
+        // Title placeholders often lack idx but always have type, so fall
+        // back to the type-keyed entry populated by SlideExtractor.
+        const g = (phIdx ? opts.placeholderGeom[phIdx] : undefined)
+          ?? (phType ? opts.placeholderGeom["type:" + phType] : undefined);
         x = g?.x ?? 0;
         y = g?.y ?? 0;
         cx = g?.cx ?? 1000000;
@@ -222,9 +254,24 @@ export class TextExtractor {
         x = 0; y = 0; cx = 1000000; cy = 500000;
       }
 
-      // Build rich HTML for bullets/numbering if present
+      // Body placeholders inherit bullet styling from the master's bodyStyle,
+      // which the lib doesn't read. Promote plain paragraphs to disc bullets
+      // when a body placeholder has multiple paragraphs.
+      if (phType === "body" && paraItems.length > 1) {
+        for (const it of paraItems) {
+          if (it.kind === "p") {
+            it.kind = "ul";
+            it.listStyle = "disc";
+          }
+        }
+      }
+
+      // Build rich HTML for bullets/numbering, or whenever a shape has 2+
+      // paragraphs — the plain content fallback joins runs with spaces and
+      // collapses paragraph breaks, so multi-paragraph shapes need the rich
+      // path even without explicit bullets.
       let richHtml: string | undefined = undefined;
-      if (paraItems.some((it) => it.kind !== "p")) {
+      if (paraItems.length > 1 || paraItems.some((it) => it.kind !== "p")) {
         const parts: string[] = [];
         let open: { kind: "ul" | "ol"; listStyle?: string } | null = null;
         for (const it of paraItems) {
@@ -260,10 +307,11 @@ export class TextExtractor {
         font: {
           name: fontName,
           size: fontSize,
-          color: color ?? "#000000" // fallback absoluto si quieres
+          color: color ?? "#000000", // fallback absoluto si quieres
+          weight: fontWeight
         },
         align: {
-          horizontal: horizontalAlign ?? "left",
+          horizontal: horizontalAlign ?? (isCenteredPh ? "center" : "left"),
           vertical: verticalAlign
         },
         padding,

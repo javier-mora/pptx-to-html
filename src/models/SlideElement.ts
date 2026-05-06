@@ -37,6 +37,9 @@ export interface TextElement {
 
     /** Font color as hexadecimal string (#RRGGBB) */
     color: string;
+
+    /** Font weight (normal/bold) */
+    weight?: "normal" | "bold";
   };
 
   /** Horizontal and vertical alignment inside its bounding box */
