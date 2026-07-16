@@ -23,18 +23,7 @@ export class XmlHelper {
     if (typeof DP === "function") {
       return new DP().parseFromString(xmlString, "application/xml");
     }
-    try {
-      // Optional runtime load if host app installed it; not a hard dependency
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const xmldom = require("@xmldom/xmldom");
-      const Parser = xmldom.DOMParser || xmldom?.DOMParser;
-      if (Parser) {
-        return new Parser().parseFromString(xmlString, "application/xml");
-      }
-    } catch {
-      // ignore
-    }
-    libWarn("No DOMParser available. Use XmlHelper.setDomParser() or install '@xmldom/xmldom'.");
+    libWarn("No DOMParser available. Provide one through XmlHelper.setDomParser() or pptxToHtml({ domParserFactory }).");
     throw new Error("DOMParser not available in this environment");
   }
 
@@ -58,6 +47,14 @@ export class XmlHelper {
     if (raw == null || raw === "") return 0;
     const n = Number(raw);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  /** Returns the paint order of an element's top-level ancestor in a shape tree. */
+  static getZIndex(element: Element, spTree: Element): number {
+    let top: Element | null = element;
+    while (top?.parentElement && top.parentElement !== spTree) top = top.parentElement;
+    if (!top || top.parentElement !== spTree) return 0;
+    return Array.from(spTree.children).indexOf(top);
   }
 
   static getColorFromElement(el: Element | null, themeColors?: Record<string, string>): string | undefined {
@@ -185,7 +182,7 @@ export class XmlHelper {
     return styles;
   }
 
-  /** Allow host to provide a DOM parser (e.g., new (require('@xmldom/xmldom').DOMParser)()) */
+  /** Allow a host application to provide a DOM parser instance factory. */
   static setDomParser(factory: () => DomParserLike) {
     XmlHelper.domParserFactory = factory;
   }

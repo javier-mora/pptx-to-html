@@ -174,11 +174,13 @@ export class PptxBrowserDemo extends LitElement {
     }
   `;
 
-  slideWidth = 960;
-  slideHeight = 540;
-  scaleToFit = true;
-  letterbox = false;
-  autoloadSample = false;
+  // `declare` prevents native class fields from shadowing Lit's reactive
+  // accessors. Defaults must be assigned after `super()` in the constructor.
+  declare slideWidth: number;
+  declare slideHeight: number;
+  declare scaleToFit: boolean;
+  declare letterbox: boolean;
+  declare autoloadSample: boolean;
 
   private isLoading = false;
   private errorMessage = "";
@@ -187,6 +189,15 @@ export class PptxBrowserDemo extends LitElement {
   private sourceName = "No deck loaded";
   private sourceBuffer: ArrayBuffer | null = null;
   private hasAutoloaded = false;
+
+  constructor() {
+    super();
+    this.slideWidth = 960;
+    this.slideHeight = 540;
+    this.scaleToFit = true;
+    this.letterbox = false;
+    this.autoloadSample = false;
+  }
 
   protected firstUpdated(): void {
     if (this.autoloadSample && !this.hasAutoloaded) {

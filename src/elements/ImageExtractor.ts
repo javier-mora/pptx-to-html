@@ -58,6 +58,7 @@ export class ImageExtractor {
 
       const element: ImageElement = {
         type: "image",
+        zIndex: XmlHelper.getZIndex(pic, spTree),
         relId: embedId,
         src: dataUri,
         position: { x, y },

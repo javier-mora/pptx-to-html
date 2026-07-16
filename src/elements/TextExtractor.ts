@@ -301,6 +301,7 @@ export class TextExtractor {
 
       const element: TextElement = {
         type: "text",
+        zIndex: XmlHelper.getZIndex(shape, spTree),
         content,
         position: { x, y },
         size: { width: cx, height: cy },
@@ -330,7 +331,9 @@ function getParagraphText(p: Element): string {
   let out = "";
   // Iterate child nodes to preserve order of runs and breaks
   for (const child of Array.from(p.childNodes) as any[]) {
-    if (!(child instanceof Element)) {
+    // Do not use `instanceof Element`: DOM parsers supplied in Node do not
+    // share the browser's global Element constructor.
+    if (child.nodeType !== 1) {
       continue;
     }
     const ln = child.localName;
@@ -343,7 +346,7 @@ function getParagraphText(p: Element): string {
       // Fields can contain runs inside
       const runs = child.getElementsByTagNameNS("*", "r");
       for (const r of Array.from(runs)) {
-        const t = r.getElementsByTagNameNS("*", "t")[0]?.textContent ?? "";
+        const t = (r as Element).getElementsByTagNameNS("*", "t")[0]?.textContent ?? "";
         out += t;
       }
     } else if (ln === "tab") {

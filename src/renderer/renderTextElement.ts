@@ -1,4 +1,5 @@
 import { TextElement } from "../models/SlideElement";
+import { safeColor, safeFontFamily } from "./htmlSafety";
 
 /**
  * Renders a text element as an absolutely positioned HTML <div>.
@@ -21,15 +22,17 @@ export function renderTextElement(el: TextElement): string {
     top: ${y}px;
     width: ${w}px;
     height: ${h}px;
+    box-sizing: border-box;
+    z-index: ${Number.isFinite(el.zIndex) ? el.zIndex : 0};
     display: flex;
     flex-direction: column;
     justify-content: ${justify};
     text-align: ${textAlign};
     padding: ${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px;
-    font-family: ${el.font?.name || "Arial"};
+    font-family: ${safeFontFamily(el.font?.name)};
     font-size: ${nf(Number(el.font?.size), 12)}pt;
     font-weight: ${el.font?.weight || "normal"};
-    color: ${el.font?.color || "#000"};
+    color: ${safeColor(el.font?.color, "#000")};
     overflow: hidden;
     white-space: pre-wrap;
   ">${inner}</div>`;

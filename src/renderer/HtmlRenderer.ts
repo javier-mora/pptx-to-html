@@ -4,6 +4,7 @@ import { renderImageElement } from "./renderImageElement";
 import { renderShapeElement } from "./renderShapeElement";
 import { renderTableElement } from "./renderTableElement";
 import { renderChartElement } from "./renderChartElement";
+import { escapeAttribute, safeColor } from "./htmlSafety";
 
 /**
  * Converts a list of SlideElements into an HTML string with absolute positioning.
@@ -33,9 +34,9 @@ export class HtmlRenderer {
         case "background": {
           const hasImg = Boolean((el as any).imageSrc);
           const styleBg = hasImg
-            ? `background-image: url('${(el as any).imageSrc}'); background-size: cover; background-position: center; background-repeat: no-repeat;`
-            : `background-color: ${(el as any).fillColor || "transparent"};`;
-          return `<div style="position:absolute; left:0; top:0; width:${baseW}px; height:${baseH}px; ${styleBg}"></div>`;
+            ? `background-image: url('${escapeAttribute((el as any).imageSrc)}'); background-size: cover; background-position: center; background-repeat: no-repeat;`
+            : `background-color: ${safeColor((el as any).fillColor)};`;
+          return `<div style="position:absolute; z-index:${Number.isFinite(el.zIndex) ? el.zIndex : -1}; left:0; top:0; width:${baseW}px; height:${baseH}px; ${styleBg}"></div>`;
         }
         case "text": return renderTextElement(el);
         case "image": return renderImageElement(el);

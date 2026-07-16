@@ -94,6 +94,7 @@ export class ShapeExtractor {
 
       const element: ShapeElement = {
         type: "shape",
+        zIndex: XmlHelper.getZIndex(shape, spTree),
         shapeType,
         position: { x, y },
         size: { width: cx, height: cy },

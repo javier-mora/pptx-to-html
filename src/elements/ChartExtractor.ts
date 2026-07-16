@@ -45,6 +45,7 @@ export class ChartExtractor {
 
       charts.push({
         type: "chart",
+        zIndex: XmlHelper.getZIndex(gf, spTree),
         chartType: parsed.type,
         position: { x, y },
         size: { width: cx, height: cy },

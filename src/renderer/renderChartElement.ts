@@ -22,10 +22,11 @@ export function renderChartElement(el: ChartElement): string {
     svg = renderScatter(el, width, height, padding, palette);
   }
 
-  const title = el.title ? `<div style="position:absolute;left:${x}px;top:${y - 20}px;width:${width}px;text-align:center;font-weight:600;">${escape(el.title)}</div>` : "";
+  const zIndex = Number.isFinite(el.zIndex) ? el.zIndex : 0;
+  const title = el.title ? `<div style="position:absolute;z-index:${zIndex};left:${x}px;top:${y - 20}px;width:${width}px;text-align:center;font-weight:600;">${escape(el.title)}</div>` : "";
 
   return (
-    `${title}<div style="position:absolute; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
+    `${title}<div style="position:absolute; z-index:${zIndex}; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
         ${svg}
       </svg>

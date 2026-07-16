@@ -97,6 +97,7 @@ export class SlideExtractor {
       const layoutBg = layoutRelsXml ? await this.extractBackground(layoutSpTree?.ownerDocument || null, layoutRelsXml, "ppt/slideLayouts", this.zip, themeColors) : null;
       const masterBg = masterRelsXml ? await this.extractBackground(masterSpTree?.ownerDocument || null, masterRelsXml, "ppt/slideMasters", this.zip, themeColors) : null;
       const bgElement = slideBg || layoutBg || masterBg;
+      if (bgElement) bgElement.zIndex = -1;
 
       // Extract elements from master → layout → slide (respecting z-order: back to front)
       const masterText = masterSpTree ? TextExtractor.extract(masterSpTree, themeColors, { context: "master" }) : [];
@@ -123,19 +124,22 @@ export class SlideExtractor {
       const slideCharts = await ChartExtractor.extract(spTree, relsXml, this.zip, themeColors);
       const slideShapes = ShapeExtractor.extract(spTree, themeColors);
 
+      const withLayer = <T extends SlideElement>(items: T[], layer: number): T[] =>
+        items.map((item) => ({ ...item, zIndex: layer + (item.zIndex ?? 0) }));
+
       slides.push([
         ...(bgElement ? [bgElement] : []),
-        ...masterShapes,
-        ...masterImages,
-        ...masterText,
-        ...layoutShapes,
-        ...layoutImages,
-        ...layoutText,
-        ...slideShapes,
-        ...slideTables,
-        ...slideCharts,
-        ...slideImages,
-        ...slideText,
+        ...withLayer(masterShapes, 0),
+        ...withLayer(masterImages, 0),
+        ...withLayer(masterText, 0),
+        ...withLayer(layoutShapes, 10000),
+        ...withLayer(layoutImages, 10000),
+        ...withLayer(layoutText, 10000),
+        ...withLayer(slideShapes, 20000),
+        ...withLayer(slideTables, 20000),
+        ...withLayer(slideCharts, 20000),
+        ...withLayer(slideImages, 20000),
+        ...withLayer(slideText, 20000),
       ]);
     }
 

@@ -1,4 +1,5 @@
 import { TableElement } from "../models/SlideElement";
+import { safeColor, safeFontFamily } from "./htmlSafety";
 
 export function renderTableElement(el: TableElement): string {
   const nf = (n: number, fb = 0) => (Number.isFinite(n) ? n : fb);
@@ -33,10 +34,10 @@ export function renderTableElement(el: TableElement): string {
             padding:${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px;
             text-align:${ta};
             vertical-align:${va === "middle" ? "middle" : va};
-            ${cell.fillColor ? `background-color:${cell.fillColor};` : ""}
-            ${!cell.fillColor && bg ? `background-color:${bg};` : ""}
-            ${cell.font?.color ? `color:${cell.font.color};` : (fontColor ? `color:${fontColor};` : "")}
-            ${cell.font?.name ? `font-family:${cell.font.name};` : ""}
+            ${cell.fillColor ? `background-color:${safeColor(cell.fillColor)};` : ""}
+            ${!cell.fillColor && bg ? `background-color:${safeColor(bg)};` : ""}
+            ${cell.font?.color ? `color:${safeColor(cell.font.color, "#000")};` : (fontColor ? `color:${safeColor(fontColor, "#000")};` : "")}
+            ${cell.font?.name ? `font-family:${safeFontFamily(cell.font.name)};` : ""}
             ${cell.font?.size ? `font-size:${cell.font.size}pt;` : ""}
             ${borderCss}
             ${isHeaderCol ? "font-weight:600;" : ""}
@@ -55,8 +56,8 @@ export function renderTableElement(el: TableElement): string {
     })
     .join("");
 
-  return `<div style="position:absolute; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
-    <table style="border-collapse:collapse; width:100%; height:100%; table-layout:fixed;${tableBg ? ` background-color:${tableBg};` : ""}">
+  return `<div style="position:absolute; z-index:${Number.isFinite(el.zIndex) ? el.zIndex : 0}; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
+    <table style="border-collapse:collapse; width:100%; height:100%; table-layout:fixed;${tableBg ? ` background-color:${safeColor(tableBg)};` : ""}">
       <colgroup>${cols}</colgroup>
       <tbody>${rowsHtml}</tbody>
     </table>
@@ -69,7 +70,7 @@ function computeCellBordersCSS(el: TableElement, cell: any, rowIndex: number, co
   const apply = (side: string, b?: { color?: string; width?: number; style?: string }) => {
     if (!b) return;
     const w = b.width ?? 1;
-    const c = b.color ?? "#000";
+    const c = safeColor(b.color, "#000");
     const st = b.style === "dashed" || b.style === "dotted" ? b.style : "solid";
     css.push(`border-${side}: ${Math.max(1, Math.round(w))}px ${st} ${c};`);
   };

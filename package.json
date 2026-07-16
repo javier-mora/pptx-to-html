@@ -19,11 +19,12 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "storybook": "npm --prefix examples/vite run storybook",
     "build:storybook": "npm --prefix examples/vite run build-storybook",
     "dev:demo": "npm --prefix examples/vite run dev",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/**/*.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -48,10 +49,10 @@
   "overrides": {
     "glob": "^10.5.0",
     "minimatch": "^9.0.7",
-    "rollup": "^4.59.0"
+    "rollup": "^4.62.2"
   },
   "devDependencies": {
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "tsdown": "^0.22.9",
+    "typescript": "^7.0.2"
   }
 }

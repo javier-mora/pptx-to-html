@@ -1,4 +1,5 @@
 import { PptxReader } from "./core/PptxReader";
+import { XmlHelper } from "./core/XmlHelper";
 import { HtmlRenderer } from "./renderer/HtmlRenderer";
 
 /**
@@ -17,7 +18,6 @@ export async function pptxToHtml(
 ): Promise<string[]> {
   // Optional DOM parser injection for Node environments without global DOMParser
   if (config?.domParserFactory) {
-    const { XmlHelper } = await import("./core/XmlHelper");
     XmlHelper.setDomParser(config.domParserFactory as any);
   }
   const reader = new PptxReader();

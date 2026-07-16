@@ -1,5 +1,6 @@
 import { ShapeElement } from "../models/SlideElement";
 import { getSvgPathForShape } from "./shapePathMap";
+import { safeColor } from "./htmlSafety";
 
 /**
  * Renders a shape element as an absolutely positioned HTML or SVG element.
@@ -17,35 +18,39 @@ export function renderShapeElement(el: ShapeElement, options: { scaleStrokes?: b
     const rotation = el.rotationDeg && !isNaN(el.rotationDeg) ? el.rotationDeg : 0;
     const rotationStyle = rotation ? `transform: rotate(${rotation}deg); transform-origin: center;` : "";
 
+    const fillColor = safeColor(el.fillColor);
+    const borderColor = safeColor(el.borderColor);
+    const borderWidth = el.strokeWidth && Number.isFinite(el.strokeWidth) ? el.strokeWidth : 1;
     const style = `
     position: absolute;
     left: ${x}px;
     top: ${y}px;
     width: ${width}px;
     height: ${height}px;
+    z-index: ${Number.isFinite(el.zIndex) ? el.zIndex : 0};
     ${rotationStyle}
   `;
 
     // Basic HTML shapes
     if (el.shapeType === "rect") {
         return `<div style="${style}
-      background-color: ${el.fillColor};
-      border: 1px solid ${el.borderColor ?? "transparent"};
+      background-color: ${fillColor};
+      border: ${borderWidth}px solid ${borderColor};
       box-sizing: border-box;"></div>`;
     }
 
     if (el.shapeType === "ellipse") {
         return `<div style="${style}
-      background-color: ${el.fillColor};
-      border: 1px solid ${el.borderColor ?? "transparent"};
+      background-color: ${fillColor};
+      border: ${borderWidth}px solid ${borderColor};
       border-radius: 50%;
       box-sizing: border-box;"></div>`;
     }
 
     if (el.shapeType === "roundRect") {
         return `<div style="${style}
-      background-color: ${el.fillColor};
-      border: 1px solid ${el.borderColor ?? "transparent"};
+      background-color: ${fillColor};
+      border: ${borderWidth}px solid ${borderColor};
       border-radius: 16px;
       box-sizing: border-box;"></div>`;
     }
@@ -57,14 +62,15 @@ export function renderShapeElement(el: ShapeElement, options: { scaleStrokes?: b
       y,
       width,
       height,
-      el.fillColor,
-      el.borderColor,
+      fillColor,
+      borderColor,
       raw,
       el.strokeWidth && Number.isFinite(el.strokeWidth) ? el.strokeWidth : undefined,
       rotation,
       el.headEnd,
       el.tailEnd,
-      options.scaleStrokes === true
+      options.scaleStrokes === true,
+      Number.isFinite(el.zIndex) ? el.zIndex : 0
     );
 }
 
@@ -80,7 +86,8 @@ function shapeSvg(
   rotationDeg?: number,
   headEnd?: { type?: string; w?: string; len?: string },
   tailEnd?: { type?: string; w?: string; len?: string },
-  scaleStrokes?: boolean
+  scaleStrokes?: boolean,
+  zIndex = 0
 ): string {
   const strokeColorOpt = resolveStrokeColor(stroke, fill);
   const [typeRaw, ...rest] = raw.trim().split(/\s+/);
@@ -99,6 +106,7 @@ function shapeSvg(
     top: ${y}px;
     width: ${svgWidth}px;
     height: ${svgHeight}px;
+    z-index: ${zIndex};
     ${rotationStyle}
   `;
 
@@ -158,6 +166,7 @@ function shapeSvg(
               top: ${y}px;
               width: ${effectiveWidth}px;
               height: ${effectiveHeight}px;
+              z-index: ${zIndex};
               ${rotationStyle}
             "
             overflow="visible">

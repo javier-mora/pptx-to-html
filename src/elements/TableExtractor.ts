@@ -74,6 +74,7 @@ export class TableExtractor {
 
       tables.push({
         type: "table",
+        zIndex: XmlHelper.getZIndex(gf, spTree),
         position: { x, y },
         size: { width: cx, height: cy },
         columns,

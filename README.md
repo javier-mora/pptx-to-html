@@ -49,7 +49,7 @@ document.getElementById("file")!.addEventListener("change", (event) => {
 
 ## Quick Start (Node)
 
-In Node, there is no built-in `DOMParser`. Provide one via `domParserFactory` or install a DOM parser in your app such as `@xmldom/xmldom`.
+In Node, there is no built-in `DOMParser`. Install a DOM parser in your app and provide it through `domParserFactory`.
 
 ```bash
 npm install @xmldom/xmldom
@@ -86,8 +86,8 @@ void main();
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `width` | `number` | PPT base width or `960` | Target container width in pixels |
-| `height` | `number` | PPT base height or `540` | Target container height in pixels |
+| `width` | `number` | PPT base width or `960` | Target viewport width in pixels; use `scaleToFit` to resize slide content |
+| `height` | `number` | PPT base height or `540` | Target viewport height in pixels; use `scaleToFit` to resize slide content |
 | `scaleToFit` | `boolean` | `false` | Scales the slide viewport into the target container |
 | `letterbox` | `boolean` | `true` when `scaleToFit` is `true` | Preserves aspect ratio with bars instead of stretching |
 | `domParserFactory` | `() => { parseFromString(xml: string, mime: string): Document }` | `undefined` | Optional parser factory for Node environments |
@@ -115,7 +115,7 @@ Notes:
 ## Environment Support
 
 - Browsers: modern evergreen browsers with ES module support.
-- Node: supported through `domParserFactory`, or by installing a parser such as `@xmldom/xmldom`. The library also attempts a best-effort `require("@xmldom/xmldom")` when available.
+- Node: supported through `domParserFactory`; for example, install `@xmldom/xmldom` in the host app and return a new `DOMParser` from the factory.
 
 ## License
 

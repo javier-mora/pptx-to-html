@@ -17,6 +17,8 @@ export interface Size {
 export interface TextElement {
   /** Element type identifier */
   type: "text";
+  /** Paint order within the slide. Larger values are painted in front. */
+  zIndex?: number;
 
   /** Text content */
   content: string;
@@ -58,6 +60,7 @@ export interface TextElement {
 export interface ImageElement {
   /** Element type identifier */
   type: "image";
+  zIndex?: number;
 
   /** Relationship ID pointing to the image in /ppt/media */
   relId: string;
@@ -75,6 +78,7 @@ export interface ImageElement {
 export interface ShapeElement {
   /** Element type identifier */
   type: "shape";
+  zIndex?: number;
 
   /** Shape type name (e.g. rectangle, ellipse) */
   shapeType: string;
@@ -107,6 +111,7 @@ export interface ShapeElement {
 export interface BackgroundElement {
   /** Element type identifier */
   type: "background";
+  zIndex?: number;
 
   /** Solid background color (hex) */
   fillColor?: string;
@@ -138,6 +143,7 @@ export interface TableRow {
 
 export interface TableElement {
   type: "table";
+  zIndex?: number;
   position: Position; // EMUs
   size: Size; // EMUs
   columns: number[]; // column widths in EMUs
@@ -187,6 +193,7 @@ export interface ChartSeries {
 
 export interface ChartElement {
   type: "chart";
+  zIndex?: number;
   chartType: ChartType;
   position: Position; // EMUs
   size: Size; // EMUs
