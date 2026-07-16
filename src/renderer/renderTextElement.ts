@@ -28,6 +28,7 @@ export function renderTextElement(el: TextElement): string {
     padding: ${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px;
     font-family: ${el.font?.name || "Arial"};
     font-size: ${nf(Number(el.font?.size), 12)}pt;
+    font-weight: ${el.font?.weight || "normal"};
     color: ${el.font?.color || "#000"};
     overflow: hidden;
     white-space: pre-wrap;

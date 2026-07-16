@@ -110,7 +110,14 @@ export class SlideExtractor {
       const masterGeom = this.extractPlaceholderGeom(masterSpTree);
       const layoutGeom = this.extractPlaceholderGeom(layoutSpTree);
       const mergedGeom: Record<string, { x: number; y: number; cx: number; cy: number }> = { ...masterGeom, ...layoutGeom };
-      const slideText = TextExtractor.extract(spTree, themeColors, { context: "slide", placeholderGeom: mergedGeom });
+      const masterTypes = this.extractPlaceholderTypes(masterSpTree);
+      const layoutTypes = this.extractPlaceholderTypes(layoutSpTree);
+      const mergedTypes: Record<string, string> = { ...masterTypes, ...layoutTypes };
+      const slideText = TextExtractor.extract(spTree, themeColors, {
+        context: "slide",
+        placeholderGeom: mergedGeom,
+        placeholderTypes: mergedTypes,
+      });
       const slideImages = await ImageExtractor.extract(spTree, relsXml, this.zip, "ppt/slides");
       const slideTables = TableExtractor.extract(spTree, themeColors, themeTableStyles);
       const slideCharts = await ChartExtractor.extract(spTree, relsXml, this.zip, themeColors);
@@ -149,6 +156,24 @@ export class SlideExtractor {
     return resolved.join("/");
   }
 
+  /** Build an `idx → type` map from layout/master placeholders so slide-level
+   *  shapes that only carry `idx` can resolve their inherited placeholder
+   *  type (e.g. "body", "title"). */
+  private extractPlaceholderTypes(spTree: Element | null): Record<string, string> {
+    const map: Record<string, string> = {};
+    if (!spTree) return map;
+    const shapes = spTree.getElementsByTagNameNS("*", "sp");
+    for (const shape of Array.from(shapes)) {
+      const nvPr = shape.getElementsByTagNameNS("*", "nvPr")[0] ?? null;
+      const ph = nvPr?.getElementsByTagNameNS("*", "ph")[0] ?? null;
+      if (!ph) continue;
+      const idx = ph.getAttribute("idx") || undefined;
+      const type = ph.getAttribute("type") || undefined;
+      if (idx && type) map[idx] = type;
+    }
+    return map;
+  }
+
   private extractPlaceholderGeom(spTree: Element | null): Record<string, { x: number; y: number; cx: number; cy: number }> {
     const map: Record<string, { x: number; y: number; cx: number; cy: number }> = {};
     if (!spTree) return map;
@@ -157,17 +182,26 @@ export class SlideExtractor {
       const nvPr = shape.getElementsByTagNameNS("*", "nvPr")[0] ?? null;
       const ph = nvPr?.getElementsByTagNameNS("*", "ph")[0] ?? null;
       const idx = ph?.getAttribute("idx") || undefined;
-      if (!idx) continue;
+      const type = ph?.getAttribute("type") || undefined;
+      // Title placeholders typically have only `type` (no `idx`), so key the
+      // map by idx when present and fall back to a `type:<value>` key.
+      const key = idx || (type ? "type:" + type : undefined);
+      if (!key) continue;
       const xfrm = shape.getElementsByTagNameNS("*", "xfrm")[0] ?? null;
       const off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
       const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
       if (!off || !ext) continue;
-      map[idx] = {
+      const geom = {
         x: XmlHelper.getAttrAsNumber(off, "x"),
         y: XmlHelper.getAttrAsNumber(off, "y"),
         cx: XmlHelper.getAttrAsNumber(ext, "cx"),
         cy: XmlHelper.getAttrAsNumber(ext, "cy"),
       };
+      map[key] = geom;
+      // Slides may use `title` while the layout uses `ctrTitle` for the same
+      // box (and vice versa). Mirror so the slide-side lookup matches.
+      if (type === "title") map["type:ctrTitle"] = geom;
+      else if (type === "ctrTitle") map["type:title"] = geom;
     }
     return map;
   }
