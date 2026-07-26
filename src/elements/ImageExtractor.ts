@@ -1,6 +1,7 @@
 import { ImageElement } from "../models/SlideElement";
 import { XmlHelper } from "../core/XmlHelper";
 import JSZip from "jszip";
+import { imageMimeType } from "../renderer/htmlSafety";
 
 /**
  * Responsible for extracting image elements from a slide XML node.
@@ -42,8 +43,7 @@ export class ImageExtractor {
       if (!imageFile) continue;
 
       const binary = await imageFile.async("base64");
-      const extImg = normalizedPath.split(".").pop()?.toLowerCase() || "png";
-      const dataUri = `data:image/${extImg};base64,${binary}`;
+      const dataUri = `data:${imageMimeType(normalizedPath)};base64,${binary}`;
 
       const xfrm = pic.getElementsByTagNameNS("*", "xfrm")[0];
 

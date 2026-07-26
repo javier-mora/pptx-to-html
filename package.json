@@ -1,6 +1,6 @@
 {
   "name": "@jvmr/pptx-to-html",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publishConfig": {
     "access": "public"
   },
@@ -43,6 +43,7 @@
     "url": "https://github.com/javier-mora/pptx-to-html/issues"
   },
   "homepage": "https://github.com/javier-mora/pptx-to-html#readme",
+  "funding": "https://github.com/sponsors/javier-mora",
   "dependencies": {
     "jszip": "^3.10.1"
   },

@@ -21,10 +21,14 @@ export class HtmlRenderer {
     elements: SlideElement[],
     options: { width?: number; height?: number; scaleToFit?: boolean; letterbox?: boolean; baseWidth?: number; baseHeight?: number } = {}
   ): string {
-    const baseW = options.baseWidth ?? 960;
-    const baseH = options.baseHeight ?? 540;
-    const targetW = options.width ?? baseW;
-    const targetH = options.height ?? baseH;
+    // This is public JavaScript-facing API as well as TypeScript API. Avoid
+    // emitting invalid CSS or divisions by zero when callers pass bad values.
+    const dimension = (value: unknown, fallback: number) =>
+      typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+    const baseW = dimension(options.baseWidth, 960);
+    const baseH = dimension(options.baseHeight, 540);
+    const targetW = dimension(options.width, baseW);
+    const targetH = dimension(options.height, baseH);
     const scaleToFit = options.scaleToFit === true;
     // Default letterbox to true when scaleToFit is enabled unless explicitly set to false
     const letterbox = scaleToFit ? options.letterbox !== false : options.letterbox === true;

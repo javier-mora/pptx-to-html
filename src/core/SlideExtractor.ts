@@ -6,6 +6,7 @@ import { ShapeExtractor } from "../elements/ShapeExtractor";
 import { TableExtractor } from "../elements/TableExtractor";
 import { ChartExtractor } from "../elements/ChartExtractor";
 import { SlideElement } from "../models/SlideElement";
+import { imageMimeType } from "../renderer/htmlSafety";
 
 /**
  * Responsible for extracting all slides from the .pptx file as lists of SlideElement.
@@ -24,13 +25,14 @@ export class SlideExtractor {
     const themeColors = XmlHelper.extractThemeColors(themeXml);
     const themeTableStyles = XmlHelper.extractThemeTableStyles(themeXml);
 
-    const slidePaths = Object.keys(this.zip.files)
+    const fallbackSlidePaths = Object.keys(this.zip.files)
       .filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f))
       .sort((a, b) => {
         const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || "0", 10);
         const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || "0", 10);
         return numA - numB;
       });
+    const slidePaths = await this.getSlidePathsInPresentationOrder(fallbackSlidePaths);
 
     const slides: SlideElement[][] = [];
 
@@ -249,13 +251,50 @@ export class SlideExtractor {
         const file = zip.file(fullPath);
         if (file) {
           const binary = await file.async("base64");
-          const ext = fullPath.split(".").pop()?.toLowerCase() || "png";
-          const dataUri = `data:image/${ext};base64,${binary}`;
+          const dataUri = `data:${imageMimeType(fullPath)};base64,${binary}`;
           return { type: "background", imageSrc: dataUri } as SlideElement;
         }
       }
     }
 
     return null;
+  }
+
+  /**
+   * Slides are displayed according to `presentation.xml`'s relationship list,
+   * not according to the numeric suffix in their file names. The latter is
+   * commonly sequential but changes after slides are moved or duplicated.
+   */
+  private async getSlidePathsInPresentationOrder(fallback: string[]): Promise<string[]> {
+    const presentation = this.zip.file("ppt/presentation.xml");
+    const relationships = this.zip.file("ppt/_rels/presentation.xml.rels");
+    if (!presentation || !relationships) return fallback;
+
+    try {
+      const [presentationXml, relationshipsXml] = await Promise.all([
+        presentation.async("string"),
+        relationships.async("string"),
+      ]);
+      const doc = XmlHelper.parseXml(presentationXml);
+      const rels = XmlHelper.parseXml(relationshipsXml);
+      const ordered: string[] = [];
+      const slideIds = Array.from(doc.getElementsByTagNameNS("*", "sldId"));
+      // If the list itself is absent, retain compatibility with minimal or
+      // malformed files that only expose the individual slide XML files.
+      if (slideIds.length === 0) return fallback;
+
+      for (const slideId of slideIds) {
+        const relationshipId = slideId.getAttribute("r:id");
+        if (!relationshipId) continue;
+        const target = XmlHelper.findRelationshipById(rels, relationshipId)?.getAttribute("Target");
+        if (!target) continue;
+        const path = this.resolvePath(target, "ppt");
+        if (this.zip.file(path) && !ordered.includes(path)) ordered.push(path);
+      }
+
+      return ordered;
+    } catch {
+      return fallback;
+    }
   }
 }
