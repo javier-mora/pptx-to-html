@@ -214,6 +214,14 @@ function renderLine(el: ChartElement, width: number, height: number, pad: number
       });
     }
   });
+  // Category labels on x-axis
+  if (el.categories.length > 0) {
+    const labelSize = Math.max(10, Math.min(12, chartW / (catCount * 4)));
+    el.categories.forEach((c, i) => {
+      const cx = pad + i * xStep;
+      parts.push(`<text x="${cx}" y="${height - pad + 14}" text-anchor="middle" font-size="${labelSize}" fill="#333">${escape(String(c))}</text>`);
+    });
+  }
   return parts.join("\n");
 }
 
@@ -283,14 +291,16 @@ function renderPie(el: ChartElement, width: number, height: number, palette: str
     const x2 = cx + r * Math.cos(end);
     const y2 = cy + r * Math.sin(end);
     const large = end - start > Math.PI ? 1 : 0;
-    const color = (s0 && s0.color) || palette[i % palette.length];
+    const color = (s0 && s0.ptColors && s0.ptColors[i]) || (s0 && s0.color) || palette[i % palette.length];
     const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
     parts.push(`<path d="${d}" fill="${color}" />`);
     if (el.showDataLabels && frac > 0) {
       const mid = (start + end) / 2;
       const lx = cx + (r + 12) * Math.cos(mid);
       const ly = cy + (r + 12) * Math.sin(mid);
-      parts.push(`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="10" fill="#000">${(frac * 100).toFixed(0)}%</text>`);
+      const catName = String(el.categories[i] || "");
+      const pieLabel = catName ? `${escape(catName)} ${(frac * 100).toFixed(0)}%` : `${(frac * 100).toFixed(0)}%`;
+      parts.push(`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="10" fill="#000">${pieLabel}</text>`);
     }
     start = end;
   });
