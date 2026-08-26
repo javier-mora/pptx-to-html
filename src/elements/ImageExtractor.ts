@@ -78,11 +78,16 @@ export class ImageExtractor {
    * @returns Normalized path inside the zip (e.g. "ppt/media/image1.png")
    */
   private static normalizePath(target: string, basePath: string): string {
+    // Absolute targets (starting with "/") are relative to the package root,
+    // not to the .rels file location. pptxgenjs writes absolute targets.
+    if (target.startsWith("/")) {
+      return target.slice(1);
+    }
     const parts = (basePath + "/" + target).split("/");
     const resolved: string[] = [];
     for (const part of parts) {
       if (part === "..") resolved.pop();
-      else if (part !== ".") resolved.push(part);
+      else if (part !== "." && part !== "") resolved.push(part);
     }
     return resolved.join("/");
   }

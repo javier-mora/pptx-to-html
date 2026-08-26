@@ -150,6 +150,11 @@ export class SlideExtractor {
 
   /** Normalize a relative path against a base directory inside ppt folder */
   private resolvePath(target: string, baseDir: string): string {
+    // Absolute targets (starting with "/") are relative to the package root,
+    // not to the .rels file location. pptxgenjs writes absolute targets.
+    if (target.startsWith("/")) {
+      return target.slice(1);
+    }
     const parts = (baseDir + "/" + target).split("/");
     const resolved: string[] = [];
     for (const part of parts) {
