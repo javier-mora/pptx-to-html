@@ -35,17 +35,12 @@ export class ChartExtractor {
       const parsed = this.parseChart(doc, themeColors);
       if (!parsed) continue;
 
-      const xfrm = gf.getElementsByTagNameNS("*", "xfrm")[0] ?? null;
-      const off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
-      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
-      const x = off ? XmlHelper.getAttrAsNumber(off, "x") : 0;
-      const y = off ? XmlHelper.getAttrAsNumber(off, "y") : 0;
-      const cx = ext ? XmlHelper.getAttrAsNumber(ext, "cx") : 1000000;
-      const cy = ext ? XmlHelper.getAttrAsNumber(ext, "cy") : 600000;
+      const { x, y, cx, cy, rotationDeg } = XmlHelper.getAbsoluteTransform(gf, spTree);
 
       charts.push({
         type: "chart",
         zIndex: XmlHelper.getZIndex(gf, spTree),
+        rotationDeg,
         chartType: parsed.type,
         position: { x, y },
         size: { width: cx, height: cy },
@@ -150,8 +145,10 @@ export class ChartExtractor {
     const tx = title.getElementsByTagNameNS("*", "tx")[0] || null;
     const rich = tx?.getElementsByTagNameNS("*", "rich")[0] || null;
     if (rich) {
-      const t = rich.getElementsByTagNameNS("*", "t")[0]?.textContent || undefined;
-      return t || undefined;
+      const text = Array.from(rich.getElementsByTagNameNS("*", "t"))
+        .map((t) => t.textContent || "")
+        .join("");
+      return text || undefined;
     }
     const v = tx?.getElementsByTagNameNS("*", "v")[0]?.textContent || undefined;
     return v || undefined;
@@ -164,13 +161,13 @@ export class ChartExtractor {
     const strCache = cat.getElementsByTagNameNS("*", "strCache")[0] || null;
     if (strCache) {
       const pts = Array.from(strCache.getElementsByTagNameNS("*", "pt"));
-      return pts.map((p) => p.getElementsByTagNameNS("*", "v")[0]?.textContent || "");
+      return this.indexedValues(pts, (p) => p.getElementsByTagNameNS("*", "v")[0]?.textContent || "");
     }
     // Try numCache
     const numCache = cat.getElementsByTagNameNS("*", "numCache")[0] || null;
     if (numCache) {
       const pts = Array.from(numCache.getElementsByTagNameNS("*", "pt"));
-      return pts.map((p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
+      return this.indexedValues(pts, (p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
     }
     // Try multiLvlStrCache (pptxgenjs writes category labels this way)
     const multiLvlStrCache = cat.getElementsByTagNameNS("*", "multiLvlStrCache")[0] || null;
@@ -178,7 +175,7 @@ export class ChartExtractor {
       const firstLvl = multiLvlStrCache.getElementsByTagNameNS("*", "lvl")[0] || null;
       if (firstLvl) {
         const pts = Array.from(firstLvl.getElementsByTagNameNS("*", "pt"));
-        return pts.map((p) => p.getElementsByTagNameNS("*", "v")[0]?.textContent || "");
+        return this.indexedValues(pts, (p) => p.getElementsByTagNameNS("*", "v")[0]?.textContent || "");
       }
     }
     return null;
@@ -194,7 +191,7 @@ export class ChartExtractor {
       let values: number[] = [];
       if (numCache) {
         const pts = Array.from(numCache.getElementsByTagNameNS("*", "pt"));
-        values = pts.map((p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
+        values = this.indexedValues(pts, (p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
       }
       const valueFormat = s.getElementsByTagNameNS("*", "dLbls")[0]?.getElementsByTagNameNS("*", "numFmt")[0]?.getAttribute("formatCode") || undefined;
       // Series color from spPr/solidFill
@@ -224,12 +221,14 @@ export class ChartExtractor {
       const yCache = s.getElementsByTagNameNS("*", "yVal")[0]?.getElementsByTagNameNS("*", "numCache")[0] || null;
       const xPts = xCache ? Array.from(xCache.getElementsByTagNameNS("*", "pt")) : [];
       const yPts = yCache ? Array.from(yCache.getElementsByTagNameNS("*", "pt")) : [];
-      const len = Math.min(xPts.length, yPts.length);
+      const xValues = this.indexedValues(xPts, (p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
+      const yValues = this.indexedValues(yPts, (p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
+      const len = Math.max(xValues.length, yValues.length);
       const points: { x: number; y: number }[] = [];
       for (let i = 0; i < len; i++) {
-        const xv = Number(xPts[i].getElementsByTagNameNS("*", "v")[0]?.textContent || 0);
-        const yv = Number(yPts[i].getElementsByTagNameNS("*", "v")[0]?.textContent || 0);
-        points.push({ x: xv, y: yv });
+        if (xValues[i] !== undefined && yValues[i] !== undefined) {
+          points.push({ x: xValues[i], y: yValues[i] });
+        }
       }
       const spPr = s.getElementsByTagNameNS("*", "spPr")[0] || null;
       const solidFill = spPr?.getElementsByTagNameNS("*", "solidFill")[0] || null;
@@ -238,5 +237,20 @@ export class ChartExtractor {
       out.push({ name, points, color, valueFormat });
     }
     return out;
+  }
+
+  /** OOXML caches address points by `idx`; XML order is not guaranteed. */
+  private static indexedValues<T>(points: Element[], value: (point: Element) => T): T[] {
+    let max = -1;
+    const indexed: Array<{ index: number; value: T }> = [];
+    points.forEach((point, fallbackIndex) => {
+      const raw = point.getAttribute("idx");
+      const index = raw !== null && /^\d+$/.test(raw) ? Number(raw) : fallbackIndex;
+      max = Math.max(max, index);
+      indexed.push({ index, value: value(point) });
+    });
+    const result = new Array<T>(max + 1);
+    for (const point of indexed) result[point.index] = point.value;
+    return result;
   }
 }

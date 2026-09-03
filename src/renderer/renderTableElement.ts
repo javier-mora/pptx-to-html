@@ -7,6 +7,7 @@ export function renderTableElement(el: TableElement): string {
   const y = nf(el.position?.y, 0) / 9525;
   const width = nf(el.size?.width, 0) / 9525;
   const height = nf(el.size?.height, 0) / 9525;
+  const rotation = Number.isFinite(el.rotationDeg) && el.rotationDeg ? `transform:rotate(${el.rotationDeg}deg); transform-origin:center;` : "";
 
   const colWidthsPx = el.columns.map((w) => nf(w, 0) / 9525);
   const colTotal = colWidthsPx.reduce((a, b) => a + b, 0) || 1;
@@ -56,7 +57,7 @@ export function renderTableElement(el: TableElement): string {
     })
     .join("");
 
-  return `<div style="position:absolute; z-index:${Number.isFinite(el.zIndex) ? el.zIndex : 0}; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
+  return `<div style="position:absolute; z-index:${Number.isFinite(el.zIndex) ? el.zIndex : 0}; left:${x}px; top:${y}px; width:${width}px; height:${height}px; ${rotation}">
     <table style="border-collapse:collapse; width:100%; height:100%; table-layout:fixed;${tableBg ? ` background-color:${safeColor(tableBg)};` : ""}">
       <colgroup>${cols}</colgroup>
       <tbody>${rowsHtml}</tbody>

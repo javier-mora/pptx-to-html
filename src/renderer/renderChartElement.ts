@@ -26,7 +26,7 @@ export function renderChartElement(el: ChartElement): string {
   const title = el.title ? `<div style="position:absolute;z-index:${zIndex};left:${x}px;top:${y - 20}px;width:${width}px;text-align:center;font-weight:600;">${escape(el.title)}</div>` : "";
 
   return (
-    `${title}<div style="position:absolute; z-index:${zIndex}; left:${x}px; top:${y}px; width:${width}px; height:${height}px;">
+    `${title}<div style="position:absolute; z-index:${zIndex}; left:${x}px; top:${y}px; width:${width}px; height:${height}px;${Number.isFinite(el.rotationDeg) && el.rotationDeg ? ` transform:rotate(${el.rotationDeg}deg); transform-origin:center;` : ""}">
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
         ${svg}
       </svg>
@@ -35,36 +35,24 @@ export function renderChartElement(el: ChartElement): string {
 }
 
 function renderBarLike(el: ChartElement, width: number, height: number, pad: number, palette: string[]): string {
-  const catCount = el.categories.length || 1;
+  const catCount = Math.max(1, el.categories.length, ...el.series.map((series) => series.values?.length || 0));
   const chartW = width - pad * 2;
   const chartH = height - pad * 2;
   const isHorizontal = el.chartType === "bar";
   const stacked = el.stackedMode && el.stackedMode !== "none";
   const percent = el.stackedMode === "percent";
-  // seriesCount not required after stacked handling; compute widths per branch
-
-  let maxVal = 1;
-  if (stacked) {
-    const sums = new Array(catCount).fill(0).map((_, i) => el.series.reduce((acc, s) => acc + (((s.values || [])[i]) || 0), 0));
-    maxVal = percent ? 1 : Math.max(1, ...sums);
-  } else {
-    // Compute max across all series values without using flatMap for TS compatibility
-    let mv = 1;
-    for (const s of el.series) {
-      const vals = s.values || [];
-      for (const v of vals) mv = Math.max(mv, v);
-    }
-    maxVal = mv;
-  }
+  const domain = chartDomain(el, catCount, Boolean(stacked), percent);
+  const range = Math.max(1e-9, domain.max - domain.min);
+  const scale = (v: number) => (v - domain.min) / range;
 
   const parts: string[] = [];
   // Axes and ticks
   if (isHorizontal) {
     parts.push(`<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
     parts.push(`<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
-    const ticks = computeTicks(0, maxVal, 4);
+    const ticks = computeTicks(domain.min, domain.max, 4);
     ticks.forEach((t) => {
-      const tx = pad + (t / maxVal) * chartW;
+      const tx = pad + scale(t) * chartW;
       const ty = height - pad;
       parts.push(`<line x1="${tx}" y1="${ty}" x2="${tx}" y2="${ty + 4}" stroke="#999" stroke-width="1" />`);
       parts.push(`<text x="${tx}" y="${ty + 16}" text-anchor="middle" font-size="10" fill="#666">${formatNumber(t, percent ? "0%" : el.valueFormat)}</text>`);
@@ -72,9 +60,9 @@ function renderBarLike(el: ChartElement, width: number, height: number, pad: num
   } else {
     parts.push(`<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
     parts.push(`<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
-    const ticks = computeTicks(0, maxVal, 4);
+    const ticks = computeTicks(domain.min, domain.max, 4);
     ticks.forEach((t) => {
-      const ty = height - pad - (t / maxVal) * chartH;
+      const ty = height - pad - scale(t) * chartH;
       parts.push(`<line x1="${pad - 4}" y1="${ty}" x2="${pad}" y2="${ty}" stroke="#999" stroke-width="1" />`);
       parts.push(`<text x="${pad - 6}" y="${ty + 3}" text-anchor="end" font-size="10" fill="#666">${formatNumber(t, percent ? "0%" : el.valueFormat)}</text>`);
       parts.push(`<line x1="${pad}" y1="${ty}" x2="${width - pad}" y2="${ty}" stroke="#eee" stroke-width="1" />`);
@@ -89,11 +77,14 @@ function renderBarLike(el: ChartElement, width: number, height: number, pad: num
       (s.values || []).forEach((v, ci) => {
         const baseY = pad + ci * catBand + (catBand - (stacked ? barH : el.series.length * barH)) / 2;
         if (stacked) {
-          const prev = el.series.slice(0, si).reduce((acc, ss) => acc + (((ss.values || [])[ci]) || 0), 0);
           const sum = el.series.reduce((acc, ss) => acc + (((ss.values || [])[ci]) || 0), 0) || 1;
-          const start = ((percent ? prev / sum : prev) / maxVal) * chartW;
-          const w = ((percent ? (v || 0) / sum : v) / maxVal) * chartW;
-          const x = pad + start;
+          const rawPrev = stackedPrevious(el, si, ci, v);
+          const startValue = percent ? rawPrev / sum : rawPrev;
+          const endValue = startValue + (percent ? v / sum : v);
+          const start = scale(startValue) * chartW;
+          const end = scale(endValue) * chartW;
+          const x = pad + Math.min(start, end);
+          const w = Math.abs(end - start);
           const y = baseY;
           parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${barH}" fill="${color}" />`);
           if (el.showDataLabels) {
@@ -101,9 +92,11 @@ function renderBarLike(el: ChartElement, width: number, height: number, pad: num
             parts.push(`<text x="${x + w - 2}" y="${y + barH / 2 + 3}" text-anchor="end" font-size="10" fill="#000">${formatNumber(percent ? (v / sum) : v, percent ? "0%" : fmt)}</text>`);
           }
         } else {
-          const w = (v / maxVal) * chartW;
+          const zero = scale(0) * chartW;
+          const value = scale(v) * chartW;
+          const w = Math.abs(value - zero);
           const y = baseY + si * barH;
-          parts.push(`<rect x="${pad}" y="${y}" width="${w}" height="${barH}" fill="${color}" />`);
+          parts.push(`<rect x="${pad + Math.min(zero, value)}" y="${y}" width="${w}" height="${barH}" fill="${color}" />`);
           if (el.showDataLabels) {
             const fmt = s.valueFormat || el.valueFormat;
             parts.push(`<text x="${pad + w + 2}" y="${y + barH / 2 + 3}" font-size="10" fill="#000">${formatNumber(v, fmt)}</text>`);
@@ -124,21 +117,24 @@ function renderBarLike(el: ChartElement, width: number, height: number, pad: num
       (s.values || []).forEach((v, ci) => {
         const baseX = pad + ci * catBand + (catBand - (stacked ? barW : el.series.length * barW)) / 2;
         if (stacked) {
-          const prev = el.series.slice(0, si).reduce((acc, ss) => acc + (((ss.values || [])[ci]) || 0), 0);
           const sum = el.series.reduce((acc, ss) => acc + (((ss.values || [])[ci]) || 0), 0) || 1;
-          const start = ((percent ? prev / sum : prev) / maxVal) * chartH;
-          const h = ((percent ? (v || 0) / sum : v) / maxVal) * chartH;
+          const rawPrev = stackedPrevious(el, si, ci, v);
+          const start = scale(percent ? rawPrev / sum : rawPrev) * chartH;
+          const end = scale((percent ? rawPrev / sum : rawPrev) + (percent ? v / sum : v)) * chartH;
+          const h = Math.abs(end - start);
           const x = baseX;
-          const y = height - pad - start - h;
+          const y = height - pad - Math.max(start, end);
           parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" />`);
           if (el.showDataLabels) {
             const fmt = s.valueFormat || el.valueFormat;
             parts.push(`<text x="${x + barW / 2}" y="${y - 2}" text-anchor="middle" font-size="10" fill="#000">${formatNumber(percent ? (v / sum) : v, percent ? "0%" : fmt)}</text>`);
           }
         } else {
-          const h = (v / maxVal) * chartH;
+          const zero = scale(0) * chartH;
+          const value = scale(v) * chartH;
+          const h = Math.abs(value - zero);
           const x = baseX + si * barW;
-          const y = height - pad - h;
+          const y = height - pad - Math.max(zero, value);
           parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" />`);
           if (el.showDataLabels) {
             const fmt = s.valueFormat || el.valueFormat;
@@ -163,28 +159,25 @@ function renderBarLike(el: ChartElement, width: number, height: number, pad: num
 }
 
 function renderLine(el: ChartElement, width: number, height: number, pad: number, palette: string[]): string {
-  const catCount = el.categories.length || 1;
+  const catCount = Math.max(1, el.categories.length, ...el.series.map((series) => series.values?.length || 0));
   const chartW = width - pad * 2;
   const chartH = height - pad * 2;
-  let maxVal = 1;
-  for (const s of el.series) {
-    const vals = s.values || [];
-    for (const v of vals) maxVal = Math.max(maxVal, v);
-  }
+  const stacked = el.stackedMode && el.stackedMode !== "none";
+  const percent = el.stackedMode === "percent";
+  const domain = chartDomain(el, catCount, Boolean(stacked), percent);
+  const range = Math.max(1e-9, domain.max - domain.min);
+  const scale = (v: number) => (v - domain.min) / range;
   const xStep = chartW / Math.max(1, catCount - 1);
   const parts: string[] = [];
   parts.push(`<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
   parts.push(`<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
-  const ticks = computeTicks(0, maxVal, 4);
+  const ticks = computeTicks(domain.min, domain.max, 4);
   ticks.forEach((t) => {
-    const ty = height - pad - (t / maxVal) * chartH;
+    const ty = height - pad - scale(t) * chartH;
     parts.push(`<line x1="${pad - 4}" y1="${ty}" x2="${pad}" y2="${ty}" stroke="#999" stroke-width="1" />`);
     parts.push(`<text x="${pad - 6}" y="${ty + 3}" text-anchor="end" font-size="10" fill="#666">${formatNumber(t, el.valueFormat)}</text>`);
     parts.push(`<line x1="${pad}" y1="${ty}" x2="${width - pad}" y2="${ty}" stroke="#eee" stroke-width="1" />`);
   });
-  // Handle stacking if requested
-  const stacked = el.stackedMode && el.stackedMode !== "none";
-  const percent = el.stackedMode === "percent";
   const totals = percent ? new Array(catCount).fill(0).map((_, i) => el.series.reduce((acc, sr) => acc + ((sr.values || [])[i] || 0), 0)) : undefined;
 
   el.series.forEach((s, si) => {
@@ -194,20 +187,21 @@ function renderLine(el: ChartElement, width: number, height: number, pad: number
       const x = pad + i * xStep;
       let val = v;
       if (stacked) {
-        const prev = el.series.slice(0, si).reduce((acc, ss) => acc + (((ss.values || [])[i]) || 0), 0);
+        const prev = stackedPrevious(el, si, i, v);
         val = prev + v;
         if (percent && totals) val = totals[i] ? val / totals[i] : 0;
       }
-      const y = height - pad - (val / (percent ? 1 : maxVal)) * chartH;
+      const y = height - pad - scale(val) * chartH;
       d += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
     });
     parts.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="2" />`);
     if (el.showDataLabels) {
       (s.values || []).forEach((v, i) => {
         const x = pad + i * xStep;
-        const basePrev = stacked ? el.series.slice(0, si).reduce((acc, ss) => acc + (((ss.values || [])[i]) || 0), 0) : 0;
+        const basePrev = stacked ? stackedPrevious(el, si, i, v) : 0;
         const dispVal = percent && totals ? (v / (totals[i] || 1)) : v;
-        const y = height - pad - ((stacked ? (basePrev + v) : v) / (percent ? 1 : maxVal)) * chartH;
+        const plotValue = stacked ? basePrev + v : v;
+        const y = height - pad - scale(percent && totals ? (totals[i] ? plotValue / totals[i] : 0) : plotValue) * chartH;
         parts.push(`<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" />`);
         const fmt = s.valueFormat || el.valueFormat;
         parts.push(`<text x="${x}" y="${y - 6}" text-anchor="middle" font-size="10" fill="#000">${formatNumber(dispVal, percent ? "0%" : fmt)}</text>`);
@@ -226,36 +220,38 @@ function renderLine(el: ChartElement, width: number, height: number, pad: number
 }
 
 function renderArea(el: ChartElement, width: number, height: number, pad: number, palette: string[]): string {
-  const catCount = el.categories.length || 1;
+  const catCount = Math.max(1, el.categories.length, ...el.series.map((series) => series.values?.length || 0));
   const chartW = width - pad * 2;
   const chartH = height - pad * 2;
-  let maxVal = 1;
-  for (const s of el.series) {
-    const vals = s.values || [];
-    for (const v of vals) maxVal = Math.max(maxVal, v);
-  }
+  const stacked = el.stackedMode && el.stackedMode !== "none";
+  const percent = el.stackedMode === "percent";
+  const domain = chartDomain(el, catCount, Boolean(stacked), percent);
+  const range = Math.max(1e-9, domain.max - domain.min);
+  const scale = (v: number) => (v - domain.min) / range;
   const xStep = chartW / Math.max(1, catCount - 1);
   const parts: string[] = [];
   parts.push(`<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
   parts.push(`<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);
 
-  const stacked = el.stackedMode && el.stackedMode !== "none";
-  const percent = el.stackedMode === "percent";
   const totals = percent ? new Array(catCount).fill(0).map((_, i) => el.series.reduce((acc, sr) => acc + ((sr.values || [])[i] || 0), 0)) : undefined;
-  const baseline = new Array(catCount).fill(0);
+  const positiveBaseline = new Array(catCount).fill(0);
+  const negativeBaseline = new Array(catCount).fill(0);
 
   el.series.forEach((s, si) => {
     const color = s.color || palette[si % palette.length];
     const topY: number[] = [];
     const botY: number[] = [];
     (s.values || []).forEach((v, i) => {
-      const prev = stacked ? baseline[i] : 0;
+      const prev = stacked ? (v >= 0 ? positiveBaseline[i] : negativeBaseline[i]) : 0;
       const val = stacked ? (prev + (percent && totals ? (totals[i] ? v / totals[i] : 0) : v)) : v;
-      const top = height - pad - (val / (percent ? 1 : maxVal)) * chartH;
-      const bottom = height - pad - (prev / (percent ? 1 : maxVal)) * chartH;
+      const top = height - pad - scale(val) * chartH;
+      const bottom = height - pad - scale(prev) * chartH;
       topY.push(top);
       botY.push(bottom);
-      if (stacked) baseline[i] = percent && totals ? val : prev + v;
+      if (stacked) {
+        if (v >= 0) positiveBaseline[i] = percent && totals ? val : prev + v;
+        else negativeBaseline[i] = percent && totals ? val : prev + v;
+      }
     });
     // Build polygon path
     let d = "";
@@ -272,6 +268,39 @@ function renderArea(el: ChartElement, width: number, height: number, pad: number
   });
 
   return parts.join("\n");
+}
+
+function stackedPrevious(el: ChartElement, seriesIndex: number, categoryIndex: number, value: number): number {
+  return el.series.slice(0, seriesIndex).reduce((sum, series) => {
+    const prior = (series.values || [])[categoryIndex] || 0;
+    return sum + (value >= 0 ? Math.max(0, prior) : Math.min(0, prior));
+  }, 0);
+}
+
+function chartDomain(el: ChartElement, catCount: number, stacked: boolean, percent: boolean): { min: number; max: number } {
+  if (percent) return { min: 0, max: 1 };
+  let min = 0;
+  let max = 0;
+  if (stacked) {
+    for (let i = 0; i < catCount; i++) {
+      let positive = 0;
+      let negative = 0;
+      for (const series of el.series) {
+        const value = (series.values || [])[i] || 0;
+        if (value >= 0) positive += value;
+        else negative += value;
+      }
+      min = Math.min(min, negative);
+      max = Math.max(max, positive);
+    }
+  } else {
+    for (const series of el.series) for (const value of series.values || []) {
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+  }
+  if (min === max) return { min: min - 1, max: max + 1 };
+  return { min, max };
 }
 
 function renderPie(el: ChartElement, width: number, height: number, palette: string[]): string {
@@ -292,8 +321,12 @@ function renderPie(el: ChartElement, width: number, height: number, palette: str
     const y2 = cy + r * Math.sin(end);
     const large = end - start > Math.PI ? 1 : 0;
     const color = (s0 && s0.ptColors && s0.ptColors[i]) || (s0 && s0.color) || palette[i % palette.length];
-    const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-    parts.push(`<path d="${d}" fill="${color}" />`);
+    // SVG arcs with identical start/end points draw nothing. A 100% slice
+    // needs an explicit circle instead.
+    const d = frac >= 1
+      ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" />`
+      : `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z" fill="${color}" />`;
+    parts.push(d);
     if (el.showDataLabels && frac > 0) {
       const mid = (start + end) / 2;
       const lx = cx + (r + 12) * Math.cos(mid);
@@ -315,10 +348,14 @@ function renderScatter(el: ChartElement, width: number, height: number, pad: num
     const pts = s.points || [];
     for (const p of pts) allPoints.push(p);
   }
-  const minX = Math.min(...allPoints.map((p) => p.x), 0);
-  const maxX = Math.max(...allPoints.map((p) => p.x), 1);
-  const minY = Math.min(...allPoints.map((p) => p.y), 0);
-  const maxY = Math.max(...allPoints.map((p) => p.y), 1);
+  let minX = Math.min(...allPoints.map((p) => p.x));
+  let maxX = Math.max(...allPoints.map((p) => p.x));
+  let minY = Math.min(...allPoints.map((p) => p.y));
+  let maxY = Math.max(...allPoints.map((p) => p.y));
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) { minX = 0; maxX = 1; }
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) { minY = 0; maxY = 1; }
+  if (minX === maxX) { minX -= 0.5; maxX += 0.5; }
+  if (minY === maxY) { minY -= 0.5; maxY += 0.5; }
   const parts: string[] = [];
   // Axes
   parts.push(`<line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#999" stroke-width="1" />`);

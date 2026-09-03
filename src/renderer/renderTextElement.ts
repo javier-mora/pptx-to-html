@@ -16,6 +16,7 @@ export function renderTextElement(el: TextElement): string {
   const textAlign = el.align?.horizontal || "left";
   const justify = el.align?.vertical === "middle" ? "center" : el.align?.vertical === "bottom" ? "flex-end" : "flex-start";
   const inner = el.html ? el.html : escape(el.content);
+  const rotation = Number.isFinite(el.rotationDeg) && el.rotationDeg ? `transform:rotate(${el.rotationDeg}deg); transform-origin:center;` : "";
   return `<div style="
     position: absolute;
     left: ${x}px;
@@ -35,6 +36,7 @@ export function renderTextElement(el: TextElement): string {
     color: ${safeColor(el.font?.color, "#000")};
     overflow: hidden;
     white-space: pre-wrap;
+    ${rotation}
   ">${inner}</div>`;
 }
 

@@ -45,16 +45,16 @@ export class ImageExtractor {
       const binary = await imageFile.async("base64");
       const dataUri = `data:${imageMimeType(normalizedPath)};base64,${binary}`;
 
-      const xfrm = pic.getElementsByTagNameNS("*", "xfrm")[0];
-
-      const off = xfrm?.getElementsByTagNameNS("*", "off")[0];
-      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0];
-
-      const x = off ? XmlHelper.getAttrAsNumber(off, "x") : 0;
-      const y = off ? XmlHelper.getAttrAsNumber(off, "y") : 0;
-
-      const cx = ext ? XmlHelper.getAttrAsNumber(ext, "cx") : 1000000;
-      const cy = ext ? XmlHelper.getAttrAsNumber(ext, "cy") : 500000;
+      const { x, y, cx, cy, rotationDeg } = XmlHelper.getAbsoluteTransform(pic, spTree);
+      const srcRect = pic.getElementsByTagNameNS("*", "srcRect")[0] ?? null;
+      const crop = srcRect
+        ? {
+            left: Math.max(0, Number(srcRect.getAttribute("l") || 0)),
+            top: Math.max(0, Number(srcRect.getAttribute("t") || 0)),
+            right: Math.max(0, Number(srcRect.getAttribute("r") || 0)),
+            bottom: Math.max(0, Number(srcRect.getAttribute("b") || 0)),
+          }
+        : undefined;
 
       const element: ImageElement = {
         type: "image",
@@ -62,7 +62,9 @@ export class ImageExtractor {
         relId: embedId,
         src: dataUri,
         position: { x, y },
-        size: { width: cx, height: cy }
+        size: { width: cx, height: cy },
+        crop,
+        rotationDeg,
       };
 
       elements.push(element);

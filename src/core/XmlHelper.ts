@@ -57,6 +57,54 @@ export class XmlHelper {
     return Array.from(spTree.children).indexOf(top);
   }
 
+  /**
+   * Resolves a drawing object's transform into slide coordinates. Child objects
+   * inside a `p:grpSp` are expressed in the group's child coordinate system,
+   * so using their local `a:xfrm` directly places them incorrectly.
+   */
+  static getAbsoluteTransform(element: Element, spTree: Element): {
+    x: number; y: number; cx: number; cy: number; rotationDeg?: number;
+  } {
+    const readTransform = (node: Element) => {
+      const xfrm = node.getElementsByTagNameNS("*", "xfrm")[0] ?? null;
+      const off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
+      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
+      const chOff = xfrm?.getElementsByTagNameNS("*", "chOff")[0] ?? null;
+      const chExt = xfrm?.getElementsByTagNameNS("*", "chExt")[0] ?? null;
+      return {
+        xfrm,
+        x: off ? XmlHelper.getAttrAsNumber(off, "x") : 0,
+        y: off ? XmlHelper.getAttrAsNumber(off, "y") : 0,
+        cx: ext ? XmlHelper.getAttrAsNumber(ext, "cx") : 1000000,
+        cy: ext ? XmlHelper.getAttrAsNumber(ext, "cy") : 500000,
+        chX: chOff ? XmlHelper.getAttrAsNumber(chOff, "x") : 0,
+        chY: chOff ? XmlHelper.getAttrAsNumber(chOff, "y") : 0,
+        chCx: chExt ? XmlHelper.getAttrAsNumber(chExt, "cx") : 0,
+        chCy: chExt ? XmlHelper.getAttrAsNumber(chExt, "cy") : 0,
+        rotationDeg: xfrm?.getAttribute("rot") ? Number(xfrm.getAttribute("rot")) / 60000 : 0,
+      };
+    };
+
+    const own = readTransform(element);
+    let { x, y, cx, cy } = own;
+    let rotationDeg = own.rotationDeg;
+    let parent = element.parentElement;
+    while (parent && parent !== spTree) {
+      if (parent.localName === "grpSp") {
+        const group = readTransform(parent);
+        const sx = group.chCx > 0 ? group.cx / group.chCx : 1;
+        const sy = group.chCy > 0 ? group.cy / group.chCy : 1;
+        x = group.x + (x - group.chX) * sx;
+        y = group.y + (y - group.chY) * sy;
+        cx *= sx;
+        cy *= sy;
+        rotationDeg += group.rotationDeg;
+      }
+      parent = parent.parentElement;
+    }
+    return { x, y, cx, cy, rotationDeg: rotationDeg || undefined };
+  }
+
   static getColorFromElement(el: Element | null, themeColors?: Record<string, string>): string | undefined {
     if (!el) return undefined;
 

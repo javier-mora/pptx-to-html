@@ -22,16 +22,8 @@ export class ShapeExtractor {
     ];
 
     for (const shape of allShapes) {
-      const xfrm = shape.getElementsByTagNameNS("*", "xfrm")[0];
-      const off = xfrm?.getElementsByTagNameNS("*", "off")[0];
-      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0];
-
-      const x = off ? XmlHelper.getAttrAsNumber(off, "x") : 0;
-      const y = off ? XmlHelper.getAttrAsNumber(off, "y") : 0;
-      const cx = ext ? XmlHelper.getAttrAsNumber(ext, "cx") : 1000000;
-      const cy = ext ? XmlHelper.getAttrAsNumber(ext, "cy") : 500000;
-      const rotAttr = xfrm?.getAttribute("rot");
-      const rotationDeg = rotAttr ? Number(rotAttr) / 60000 : undefined;
+      const transform = XmlHelper.getAbsoluteTransform(shape, spTree);
+      const { x, y, cx, cy, rotationDeg } = transform;
 
       const prstGeom = shape.getElementsByTagNameNS("*", "prstGeom")[0];
       const shapeType = prstGeom?.getAttribute("prst") ?? "rect";

@@ -18,14 +18,7 @@ export class TableExtractor {
       const tbl = this.findTbl(gf);
       if (!tbl) continue;
 
-      const xfrm = gf.getElementsByTagNameNS("*", "xfrm")[0] ?? null;
-      const off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
-      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
-
-      const x = off ? XmlHelper.getAttrAsNumber(off, "x") : 0;
-      const y = off ? XmlHelper.getAttrAsNumber(off, "y") : 0;
-      const cx = ext ? XmlHelper.getAttrAsNumber(ext, "cx") : 1000000;
-      const cy = ext ? XmlHelper.getAttrAsNumber(ext, "cy") : 500000;
+      const { x, y, cx, cy, rotationDeg } = XmlHelper.getAbsoluteTransform(gf, spTree);
 
       const columns: number[] = [];
       const grid = tbl.getElementsByTagNameNS("*", "tblGrid")[0] ?? null;
@@ -55,10 +48,19 @@ export class TableExtractor {
       for (const tr of Array.from(tbl.getElementsByTagNameNS("*", "tr"))) {
         const cells: TableCell[] = [];
         for (const tc of Array.from(tr.getElementsByTagNameNS("*", "tc"))) {
+          const tcPr = tc.getElementsByTagNameNS("*", "tcPr")[0] ?? null;
+          // OOXML emits a physical continuation cell for merged ranges. It
+          // must not become a second HTML <td>; the originating cell already
+          // carries gridSpan/rowSpan.
+          const isMergedContinuation =
+            tcPr?.getAttribute("hMerge") === "1" || tcPr?.getAttribute("hMerge") === "true"
+            || tcPr?.getAttribute("vMerge") === "1" || tcPr?.getAttribute("vMerge") === "true"
+            || !!tcPr?.getElementsByTagNameNS("*", "hMerge")[0]
+            || !!tcPr?.getElementsByTagNameNS("*", "vMerge")[0];
+          if (isMergedContinuation) continue;
           const txBody = tc.getElementsByTagNameNS("*", "txBody")[0] ?? null;
           const { text, font, align, padding } = this.extractCellText(txBody, themeColors, tc);
 
-          const tcPr = tc.getElementsByTagNameNS("*", "tcPr")[0] ?? null;
           const fillColor = this.extractFillColor(tcPr, themeColors);
           const borders = this.extractCellBorders(tcPr, themeColors);
           const cell: TableCell = { text, font, align, padding, fillColor, borders };
@@ -75,6 +77,7 @@ export class TableExtractor {
       tables.push({
         type: "table",
         zIndex: XmlHelper.getZIndex(gf, spTree),
+        rotationDeg,
         position: { x, y },
         size: { width: cx, height: cy },
         columns,

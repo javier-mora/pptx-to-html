@@ -229,18 +229,15 @@ export class TextExtractor {
       if (content === "") continue;
 
       const xfrm = shape.getElementsByTagNameNS("*", "xfrm")[0];
-      let off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
-      let ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
+      const off = xfrm?.getElementsByTagNameNS("*", "off")[0] ?? null;
+      const ext = xfrm?.getElementsByTagNameNS("*", "ext")[0] ?? null;
 
       // If xfrm missing at slide-level, we'll fallback using opts.placeholderGeom below
 
       // Compute final numbers, using placeholderGeom if needed
-      let x: number, y: number, cx: number, cy: number;
+      let x: number, y: number, cx: number, cy: number, rotationDeg: number | undefined;
       if (off && ext) {
-        x = XmlHelper.getAttrAsNumber(off, "x");
-        y = XmlHelper.getAttrAsNumber(off, "y");
-        cx = XmlHelper.getAttrAsNumber(ext, "cx");
-        cy = XmlHelper.getAttrAsNumber(ext, "cy");
+        ({ x, y, cx, cy, rotationDeg } = XmlHelper.getAbsoluteTransform(shape, spTree));
       } else if (opts.placeholderGeom) {
         // Title placeholders often lack idx but always have type, so fall
         // back to the type-keyed entry populated by SlideExtractor.
@@ -302,6 +299,7 @@ export class TextExtractor {
       const element: TextElement = {
         type: "text",
         zIndex: XmlHelper.getZIndex(shape, spTree),
+        rotationDeg,
         content,
         position: { x, y },
         size: { width: cx, height: cy },

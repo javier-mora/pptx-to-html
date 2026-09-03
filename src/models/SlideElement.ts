@@ -19,6 +19,7 @@ export interface TextElement {
   type: "text";
   /** Paint order within the slide. Larger values are painted in front. */
   zIndex?: number;
+  rotationDeg?: number;
 
   /** Text content */
   content: string;
@@ -61,6 +62,7 @@ export interface ImageElement {
   /** Element type identifier */
   type: "image";
   zIndex?: number;
+  rotationDeg?: number;
 
   /** Relationship ID pointing to the image in /ppt/media */
   relId: string;
@@ -73,6 +75,9 @@ export interface ImageElement {
 
   /** Image size */
   size: Size;
+
+  /** Source crop values from DrawingML, expressed in 1/1000th percent. */
+  crop?: { left: number; top: number; right: number; bottom: number };
 }
 
 export interface ShapeElement {
@@ -144,6 +149,7 @@ export interface TableRow {
 export interface TableElement {
   type: "table";
   zIndex?: number;
+  rotationDeg?: number;
   position: Position; // EMUs
   size: Size; // EMUs
   columns: number[]; // column widths in EMUs
@@ -196,6 +202,7 @@ export interface ChartSeries {
 export interface ChartElement {
   type: "chart";
   zIndex?: number;
+  rotationDeg?: number;
   chartType: ChartType;
   position: Position; // EMUs
   size: Size; // EMUs
