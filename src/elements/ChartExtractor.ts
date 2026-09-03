@@ -64,11 +64,16 @@ export class ChartExtractor {
   }
 
   private static resolvePath(target: string, baseDir: string): string {
+    // Absolute targets (starting with "/") are relative to the package root,
+    // not to the .rels file location. pptxgenjs writes absolute targets.
+    if (target.startsWith("/")) {
+      return target.slice(1);
+    }
     const parts = (baseDir + "/" + target).split("/");
     const resolved: string[] = [];
     for (const part of parts) {
       if (part === "..") resolved.pop();
-      else if (part !== ".") resolved.push(part);
+      else if (part !== "." && part !== "") resolved.push(part);
     }
     return resolved.join("/");
   }
@@ -88,6 +93,7 @@ export class ChartExtractor {
     const line = plotArea.getElementsByTagNameNS("*", "lineChart")[0] || null;
     const area = plotArea.getElementsByTagNameNS("*", "areaChart")[0] || null;
     const pie = plotArea.getElementsByTagNameNS("*", "pieChart")[0] || null;
+    const doughnut = plotArea.getElementsByTagNameNS("*", "doughnutChart")[0] || null;
     const scatter = plotArea.getElementsByTagNameNS("*", "scatterChart")[0] || null;
 
     const chartNumFmt = plotArea.getElementsByTagNameNS("*", "dLbls")[0]?.getElementsByTagNameNS("*", "numFmt")[0]?.getAttribute("formatCode") || undefined;
@@ -125,9 +131,10 @@ export class ChartExtractor {
       const stackedMode = grouping === "stacked" ? "stacked" : grouping === "percentStacked" ? "percent" : "none";
       return { type: "area", categories: cat, series: ser, palette, title: titleText, showLegend, showDataLabels, stackedMode, valueFormat: chartNumFmt };
     }
-    if (pie) {
-      const cat = this.extractCategories(pie) || [];
-      const ser = this.extractSeries(pie, themeColors) || [];
+    if (pie || doughnut) {
+      const chartEl = pie || doughnut;
+      const cat = this.extractCategories(chartEl) || [];
+      const ser = this.extractSeries(chartEl, themeColors) || [];
       return { type: "pie", categories: cat, series: ser, palette, title: titleText, showLegend, showDataLabels, stackedMode: "none", valueFormat: chartNumFmt };
     }
     if (scatter) {
