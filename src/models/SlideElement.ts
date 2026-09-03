@@ -189,6 +189,8 @@ export interface ChartSeries {
   points?: { x: number; y: number }[]; // for scatter
   color?: string;
   valueFormat?: string; // optional Excel/OOXML numFmt formatCode
+  /** Per-datapoint colors from c:dPt elements (used by pie/doughnut) */
+  ptColors?: string[];
 }
 
 export interface ChartElement {

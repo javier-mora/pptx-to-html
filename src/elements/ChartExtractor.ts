@@ -172,6 +172,15 @@ export class ChartExtractor {
       const pts = Array.from(numCache.getElementsByTagNameNS("*", "pt"));
       return pts.map((p) => Number(p.getElementsByTagNameNS("*", "v")[0]?.textContent || 0));
     }
+    // Try multiLvlStrCache (pptxgenjs writes category labels this way)
+    const multiLvlStrCache = cat.getElementsByTagNameNS("*", "multiLvlStrCache")[0] || null;
+    if (multiLvlStrCache) {
+      const firstLvl = multiLvlStrCache.getElementsByTagNameNS("*", "lvl")[0] || null;
+      if (firstLvl) {
+        const pts = Array.from(firstLvl.getElementsByTagNameNS("*", "pt"));
+        return pts.map((p) => p.getElementsByTagNameNS("*", "v")[0]?.textContent || "");
+      }
+    }
     return null;
   }
 
@@ -192,7 +201,15 @@ export class ChartExtractor {
       const spPr = s.getElementsByTagNameNS("*", "spPr")[0] || null;
       const solidFill = spPr?.getElementsByTagNameNS("*", "solidFill")[0] || null;
       const color = XmlHelper.getColorFromElement(solidFill, themeColors);
-      series.push({ name, values, color, valueFormat });
+      // Per-datapoint colors from c:dPt (used especially by pie/doughnut charts)
+      const ptColors: string[] = [];
+      for (const dp of Array.from(s.getElementsByTagNameNS("*", "dPt"))) {
+        const di = Number(dp.getElementsByTagNameNS("*", "idx")[0]?.getAttribute("val") || 0);
+        const df = (dp.getElementsByTagNameNS("*", "spPr")[0] || null)?.getElementsByTagNameNS("*", "solidFill")[0] || null;
+        const dc = XmlHelper.getColorFromElement(df, themeColors);
+        if (dc) ptColors[di] = dc;
+      }
+      series.push({ name, values, color, valueFormat, ptColors: ptColors.length > 0 ? ptColors : undefined });
       idx += 1;
     }
     return series;
